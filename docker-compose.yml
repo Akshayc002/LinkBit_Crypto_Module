@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  bitcoind:
+    image: ruimarinho/bitcoin-core:latest
+    command:
+      -regtest
+      -rpcbind=0.0.0.0
+      -rpcallowip=0.0.0.0/0
+      -rpcuser=linkbit
+      -rpcpassword=linkbitpass
+      -fallbackfee=0.0001
+    ports:
+      - "18443:18443"
+      - "18444:18444"
