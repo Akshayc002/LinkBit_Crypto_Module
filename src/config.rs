@@ -8,3 +8,9 @@ pub fn bitcoin_network() -> Network {
         _ => Network::Regtest, // SAFE DEFAULT
     }
 }
+
+pub fn dev_signing_enabled() -> bool {
+    std::env::var("DEV_SIGNING")
+        .map(|v| v == "true")
+        .unwrap_or(false)
+}
