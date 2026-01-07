@@ -1,251 +1,269 @@
-﻿Linkbit Bitcoin Multisig Escrow Service (Rust)
 
-A non-custodial Bitcoin multisig escrow microservice, built in Rust, designed to act as the cryptographic enforcement layer for the Linkbit platform.
+# Linkbit Bitcoin Multisig Escrow Service (Rust)
 
-This service creates, validates, and enforces 2-of-3 Bitcoin multisig escrow rules using PSBT (BIP-174), without ever holding real user funds or private keys.
+A **non-custodial, cryptographic Bitcoin escrow microservice** built in **Rust** for the **Linkbit** platform.
 
-🧠 Purpose
+This service is responsible for **creating, validating, and enforcing 2-of-3 Bitcoin multisig escrow rules** using industry-standard Bitcoin primitives such as **SegWit**, **PSBT (BIP-174)**, and **secp256k1**.
 
-Provide cryptographic guarantees for Bitcoin escrow transactions while keeping all business logic, custody, and compliance outside this service.
+> ⚠️ This service **never holds real user funds or private keys in production**.
 
-This module is intentionally narrow in scope and security-first.
+---
 
-🔐 Key Principles
+## 🎯 Purpose
 
-Non-custodial – No private keys stored or managed in production
+This module acts as the **Bitcoin trust layer** for Linkbit.
 
-Deterministic & auditable – Same inputs always produce same outputs
+It ensures:
+- No single party can move escrowed Bitcoin
+- Only valid **2-of-3 multisig transactions** are accepted
+- All Bitcoin data structures are **consensus-correct**
+- Business logic stays **outside** cryptographic enforcement
 
-PSBT-first design – Compatible with wallets, HSMs, and hardware signers
+---
 
-Strict validation – Invalid Bitcoin data is rejected early
+## 🧱 High-Level Architecture
 
-Dev safety – Dangerous functionality gated by environment flags
-
-📦 What This Service Does (Current Capabilities)
-1. Health Check
-GET /health
-
-
-Confirms the service is running and reachable.
-
-2. 2-of-3 Multisig Escrow Creation
-
-POST /escrow/create
-
-
-Input
-
-Borrower public key
-
-Lender public key
-
-Escrow (Linkbit) public key
-
-Output
-
-P2WSH multisig address
-
-Redeem script (hex)
-
-Guarantees
-
-Only valid secp256k1 public keys are accepted
-
-No single party can control funds
-
-No private keys are ever used
-
-3. PSBT Creation (Unsigned)
-POST /transaction/create-psbt
-
-
-Input
-
-Fully valid unsigned Bitcoin transaction (hex)
-
-Output
-
-PSBT (Base64)
-
-Guarantees
-
-Strict Bitcoin consensus parsing
-
-No malformed or truncated transactions allowed
-
-Safe failure (no panics)
-
-4. PSBT Verification (2-of-3 Enforcement)
-POST /transaction/verify-psbt
-
-
-Input
-
-PSBT (Base64)
-
-Borrower, lender, escrow public keys
-
-What is verified
-
-PSBT structure is valid
-
-Signers are from the allowed set
-
-Exactly 2 unique signers
-
-No unknown or duplicate signers
-
-Output
-
-{ "valid": true } or a specific error
-
-⚠️ This is structural verification, not full sighash/UTXO verification (added later with Bitcoin Core).
-
-5. Dev-Only PSBT Signing (Testing Harness)
-POST /dev/sign-psbt
-
-
-Purpose
-
-Enables full end-to-end testing without wallets, Bitcoin Core, or real BTC
-
-Guard
-
-DEV_SIGNING=true
-
-
-Behavior
-
-Uses deterministic in-memory keys
-
-Simulates borrower / lender / escrow signatures
-
-Allows Postman-based demos and testing
-
-🚫 Never enabled in production
-
-🚫 What This Service Does NOT Do (By Design)
-
-❌ Hold or manage private keys (production)
-
-❌ Store or custody Bitcoin
-
-❌ Broadcast transactions
-
-❌ Decide loan or business rules
-
-❌ Perform KYC / compliance
-
-❌ Act as a wallet or node
-
-These responsibilities belong to:
-
-Spring Boot business services
-
-Wallets / HSMs
-
-Bitcoin Core or external providers
-
-🧱 Architecture Fit
-Spring Boot (Business Logic, Users, Loans)
+Spring Boot (Business Logic)
         |
-        | HTTP / gRPC
+        | REST / gRPC
         |
-Rust Bitcoin Escrow Service  ← this repo
+Rust Bitcoin Escrow Service   ← this repository
         |
-        | (later)
+        | (future integration)
         |
 Bitcoin Core / Wallet / HSM
 
+---
 
-This separation ensures:
+## 🔐 Escrow Model (2-of-3 Multisig)
 
-Strong security boundaries
+Participants:
+- **Borrower**
+- **Lender**
+- **Linkbit Escrow**
 
-Audit-friendly design
+Rules:
+- Any **2 of the 3** must sign to spend funds
+- No single party can move funds alone
 
-Regulator-friendly non-custodial model
+Valid spend paths:
+- Borrower + Lender → normal repayment
+- Lender + Escrow → liquidation
+- Borrower + Escrow → dispute resolution
 
-🛠️ Tech Stack
+---
 
-Rust
+## ✅ Current Capabilities
 
-Axum – HTTP server
+### 1️⃣ Health Check
 
-bitcoin (Rust crate) – Bitcoin primitives & PSBT
+**Endpoint**
+```
+GET /health
+```
 
-secp256k1 – Cryptography
+**Purpose**
+- Confirms service availability
+- Used by monitoring & orchestration tools
 
-Serde – Serialization
+---
 
-Tokio – Async runtime
+### 2️⃣ Multisig Escrow Creation
 
-▶️ Running the Service (Dev)
-cargo run
+**Endpoint**
+```
+POST /escrow/create
+```
 
+**Input**
+```json
+{
+  "borrower_pubkey": "02...",
+  "lender_pubkey": "03...",
+  "escrow_pubkey": "02..."
+}
+```
 
-Health check:
+**Output**
+```json
+{
+  "escrow_address": "bcrt1q... / tb1q...",
+  "redeem_script": "522102...53ae"
+}
+```
 
-curl http://localhost:9000/health
+**Guarantees**
+- All public keys are valid secp256k1 keys
+- Deterministic 2-of-3 multisig script
+- Native SegWit (P2WSH)
+- No private keys involved
 
-🔧 Enable Dev Signing (Testing Only)
-PowerShell
+---
+
+### 3️⃣ PSBT Creation (Unsigned)
+
+**Endpoint**
+```
+POST /transaction/create-psbt
+```
+
+**Input**
+```json
+{
+  "unsigned_tx_hex": "<valid_unsigned_transaction_hex>"
+}
+```
+
+**Output**
+```json
+{
+  "psbt_base64": "cHNidP8BA..."
+}
+```
+
+**Notes**
+- Transaction structure is strictly validated
+- Invalid hex or malformed transactions are rejected
+- No signing or broadcasting happens here
+
+---
+
+### 4️⃣ PSBT Structural Verification (2-of-3 Rule)
+
+**Endpoint**
+```
+POST /transaction/verify-psbt
+```
+
+**Input**
+```json
+{
+  "psbt_base64": "cHNidP8BA...",
+  "borrower_pubkey": "02...",
+  "lender_pubkey": "03...",
+  "escrow_pubkey": "02..."
+}
+```
+
+**Output (success)**
+```json
+{
+  "valid": true
+}
+```
+
+**Output (failure example)**
+```json
+{
+  "error": "NotEnoughSignatures"
+}
+```
+
+**What is enforced**
+- Only allowed signers are accepted
+- Exactly **2 unique signers** required
+- Unknown or duplicate signers are rejected
+
+> This is **structural verification**. Full cryptographic sighash verification is added later with Bitcoin Core.
+
+---
+
+### 5️⃣ Dev-Only PSBT Signing Helper (Testing Harness)
+
+**Endpoint**
+```
+POST /dev/sign-psbt
+```
+
+**Environment Flag (Required)**
+```
+DEV_SIGNING=true
+```
+
+**Input**
+```json
+{
+  "psbt_base64": "cHNidP8BA...",
+  "role": "borrower | lender | escrow"
+}
+```
+
+**Output**
+```json
+{
+  "psbt_base64": "cHNidP8BA...signed..."
+}
+```
+
+⚠️ **DEV ONLY**
+- Uses deterministic in-memory private keys
+- NOT real Bitcoin signing
+- Disabled by default
+- Must never be enabled in production
+
+---
+
+## 🚫 Explicit Non-Goals
+
+This service does **NOT**:
+- Hold private keys in production
+- Custody Bitcoin
+- Broadcast transactions
+- Perform KYC or business logic
+- Manage users or accounts
+
+Those responsibilities belong to:
+- Spring Boot services
+- Wallets / HSMs
+- Compliance & ops layers
+
+---
+
+## 🔐 Security Guarantees
+
+- No single-party fund movement
+- No fake or malformed public keys
+- No backend custody of funds
+- Deterministic, auditable scripts
+- Strict Bitcoin consensus parsing
+
+---
+
+## 🧪 Development & Testing
+
+### Run in DEV mode
+```
 $env:DEV_SIGNING="true"
 cargo run
+```
 
-Linux / macOS
-export DEV_SIGNING=true
-cargo run
+### Disable dev signing
+```
+$env:DEV_SIGNING=""
+```
 
+### Example unsigned transaction for testing
+```json
+{
+  "unsigned_tx_hex": "010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff0100e1f505000000000000000000"
+}
+```
 
-Disable before production:
+---
 
-unset DEV_SIGNING
+## 🛣️ Roadmap
 
-🧪 Typical Dev Test Flow (Postman)
+Next planned additions:
+- Wallet / HSM-based real signing
+- Bitcoin Core (regtest/testnet) integration
+- Funding validation
+- Liquidation & dispute flows
+- Transaction finalization & broadcast
+- Audit logging & persistence
 
-Create multisig escrow
+---
 
-Create PSBT
+## 📜 License
 
-Sign PSBT as borrower (dev)
-
-Sign PSBT as lender (dev)
-
-Verify PSBT → { "valid": true }
-
-This demonstrates the full escrow happy path without risk.
-
-🔐 Security Notes
-
-Dev signing is explicitly gated
-
-No unwrap() on user input
-
-Strict Bitcoin parsing
-
-Deterministic behavior for audits
-
-Designed for later HSM / wallet integration
-
-🚀 Roadmap (Next Steps)
-
-Real wallet / HSM signing
-
-Bitcoin Core integration (regtest / testnet)
-
-Funding validation
-
-Transaction finalization & broadcast
-
-Liquidation flow (lender + escrow)
-
-Dispute flow (borrower + escrow)
-
-Persistence & audit logging
-
-📄 License
-
-Internal – Linkbit
-(Not intended for public custody or wallet usage)
+Internal – Linkbit Pvt Ltd  
+All rights reserved.
