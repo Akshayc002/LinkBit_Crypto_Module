@@ -1,25 +1,18 @@
-#[cfg(test)]
-mod tests {
-    use bitcoin::secp256k1::{Secp256k1, rand::thread_rng};
-    use bitcoin::{PublicKey, Network};
-    use crate::bitcoin::multisig::create_2of3_multisig;
+use crate::bitcoin::multisig::create_2of3_multisig;
+use bitcoin::{Network, PublicKey};
 
-    #[test]
-    fn test_2of3_multisig_creation() {
-        let secp = Secp256k1::new();
-        let mut rng = thread_rng();
+#[test]
+fn creates_valid_2of3_multisig() {
+    let k1: PublicKey = "02c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7"
+        .parse().unwrap();
+    let k2: PublicKey = "03c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7d6e2f0b0c0ded7"
+        .parse().unwrap();
+    let k3: PublicKey = "02abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef"
+        .parse().unwrap();
 
-        let keys: Vec<PublicKey> = (0..3)
-            .map(|_| {
-                let keypair = bitcoin::key::Keypair::new(&secp, &mut rng);
-                PublicKey::new(keypair.public_key())
-            })
-            .collect();
+    let (address, script) =
+        create_2of3_multisig(vec![k1, k2, k3], Network::Regtest);
 
-        let (address, script) =
-            create_2of3_multisig(keys, Network::Regtest);
-
-        assert!(address.to_string().starts_with("bcrt1"));
-        assert!(script.len() > 30);
-    }
+    assert!(address.to_string().starts_with("bcrt1"));
+    assert!(script.to_bytes().ends_with(&[0xae])); // OP_CHECKMULTISIG
 }
